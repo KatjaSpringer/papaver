@@ -1,5 +1,6 @@
 # papaver
-Papaver experiment with drought and competition treatment (University of Frankfurt, Course: Evolutionary ecology of plants and global change)
+Experimental evolution experiment with a drought and competition treatment 
+(University of Frankfurt, Course: Evolutionary ecology of plants and global change)
 
 * Research plant: *Papaver rhoeas*
 * Competition plant: *Galium album*
