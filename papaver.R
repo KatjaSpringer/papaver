@@ -1,5 +1,13 @@
+#
+# Usage:
+# 
+# Rscript papaver.R <input_dir> <output_dir>
+#
+# <input_dir>: Has to contain Measures.xlsx, Soil_humidity.xlsx and COX.xlsx
+# <output_dir>: The analysis plots will be stored in this directory (has to exist)
+
 ## Load Packages
-#install.packages("Rmisc")
+#install.packages("")
 library(DataExplorer) # to explore the data
 library(lme4) # for LMER
 library(car) # for Anova
@@ -9,13 +17,177 @@ library(Rmisc) # for summarySE
 library(dplyr)
 library(ggpubr) # for ggarrange
 library(readxl)
+library(survival)
+library(survminer)
 
-setwd("C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment")
+args = commandArgs(trailingOnly=TRUE)
+
+#wd <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment"
+wd <- args[1]
+#outdir <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics"
+outdir <- args[2]
+
+
+setwd(wd)
 data <-read_excel("Measures.xlsx", col_types = c("text", 
                                                  "text", "text", "text", "numeric","numeric",   "numeric", "text", "numeric", "numeric",  "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",   "numeric", "numeric", "numeric", "numeric",  "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
-
+Soil_humidity <- read_excel("Soil_humidity.xlsx")
+COX <- read_excel("COX.xlsx")
 #---------------------------------------------------------------------------
-#   CHECKING And calculate root shoot ratio
+############################################################################
+#                         Soil humidity
+############################################################################
+## First we checked if the drought treatments worked well
+
+# preparing data
+Soil_humidity$drought_treatment <- as.factor(Soil_humidity$drought_treatment)
+Soil_humidity$prec_pred <- as.factor(Soil_humidity$prec_pred)
+Soil_humidity$competition <- as.factor(Soil_humidity$competition)
+Soil_humidity$date <- as.factor(Soil_humidity$date)
+Soil_humidity$humidity <- as.numeric(Soil_humidity$humidity)
+str(Soil_humidity)
+
+aggregate(humidity~drought_treatment + date,data=Soil_humidity,mean)
+
+summaryHUM <- summarySE(Soil_humidity, measurevar="humidity", groupvars=c("date","drought_treatment"))
+summaryHUM
+
+# Graph
+a <- ggplot(summaryHUM, aes(x=date, y=humidity, group=drought_treatment, colour=drought_treatment)) + 
+  geom_line() +
+  geom_point() +
+  ylim(c(0,60)) +
+  scale_color_manual(values = c("green","blue","gold"), name = "Drought treatment", labels = c("Control", "Short drought", "Long drought")) +
+  xlab("Days of treatment") + ylab("Soil humidity (%)") +
+  theme_bw() +
+  ggtitle("Soil humidity during the drought treatment") +
+  labs(fill = "Drought treatment") +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+  geom_errorbar(aes(ymin=humidity-se,ymax=humidity+se), position = position_dodge(width=0), width=.2, size=0.5, color="black")
+a # looks as the drought treatment worked really well
+
+
+# Creating model and checking model assumptions
+model <- lm(humidity ~ drought_treatment * competition * date, data=Soil_humidity)
+
+shapiro.test(resid(model))     # p-value = 0.07 > 0.05 => normality OK
+hist(resid(model),breaks=50)   # no transformation needed
+qqnorm(resid(model)) 
+qqline(resid(model)) 
+
+plot(resid(model) ~ fitted(model)) # Test for homoscedasticity
+bartlett.test((resid(model))~interaction(Soil_humidity$drought_treatment,Soil_humidity$competition,Soil_humidity$date), data=Soil_humidity)
+
+Anova(model,type=2)
+summary(model)
+
+lsmeans(model,pairwise~drought_treatment:date, adjust="tukey") # pairwise comparison
+
+
+############################################################################
+#                         Survival/wilting point
+############################################################################
+# Here we looked at the wilting point of the plants and the proportion
+
+# preparing data
+COX$competition <- as.factor(COX$competition)
+COX$precip_pred <- as.factor(COX$precip_pred)
+COX$family <- as.factor(COX$family)
+COX$Group <- as.factor(COX$Group)
+COX$status <- as.numeric(COX$status)
+COX$time <- as.numeric(COX$time)
+COX$nb_leavesi <- as.numeric(COX$nb_leavesi)
+COX$time = COX$time + 15 
+str(COX)
+
+# Plot: Non-wilting proportion = f(days)
+ggsurvplot(survfit(Surv(time, status) ~ Group + precip_pred + competition, data=COX),
+           conf.int = ,
+           xlim = c(13,26),
+           break.x.by = 2,
+           legend = c("right"),
+           axes.offset = F,
+           palette = c("lightgreen", "lightgreen", "darkgreen", "darkgreen", "lightblue", "lightblue", "blue", "blue", "yellow3", "yellow3", "darkorange", "darkorange"),
+           linetype=c("solid","dashed","solid","dashed","solid","dashed","solid","dashed","solid","dashed","solid","dashed"),
+           legend.labs= c("Control More C-", "Control More C+", "Control Less C-", "Control Less C+", "Short drought More C-", "Short drought More C+", "Short drought Less C-", "Short drought Less C+","Long drought More C-", "Long drought More C+", "Long drought Less C-", "Long drought Less C+"),
+           legend.title = " Treatment combination",
+           title = "",
+           xlab = "Days",
+           ylab = "Proportion of non-wilted plants",
+           font.title = "bold",
+           ggtheme = theme_classic())
+
+# Linear mixed model
+
+aggregate(time~ Group + precip_pred + competition, data=COX,mean)
+
+mod <- lmer(time ~ nb_leavesi  + precip_pred * competition * Group + (1|family), data=COX)
+Anova(mod, type = 2) 
+
+shapiro.test(resid(mod))     # p-value = 2.979e-06
+hist(resid(mod),breaks=50)   
+qqnorm(resid(mod)) 
+qqline(resid(mod))     
+
+#Model transformation
+mod <- lmer((time)^3.5 ~ nb_leavesi  + precip_pred * competition * Group + (1|family), data=COX)
+shapiro.test(resid(mod))     # p-value = 1.625e-06 => Normality OK
+hist(resid(mod),breaks=50)   
+qqnorm(resid(mod)) 
+qqline(resid(mod))    
+
+plot(resid(mod) ~ fitted(mod)) #Homoscedasticity
+
+#Anova
+Anova(mod, type = 2) 
+lsmeans(mod,pairwise ~ precip_pred:competition:Group, adjust="tukey")
+
+# function for labeling the plots
+names <- list("1control" = "Control","2short_drought" = "Short drought","3long_drought" = "Long drought")
+labeller <- function(variable,value){
+  return(names[value])
+}
+
+COX1 <- COX
+COX1 <- COX1[complete.cases(COX1[,18]),]
+levels(COX1$Group) <- c("control","short_drought", "long_drought" )
+levels(COX1$precip_pred) <- c("More", "Less")
+levels(COX1$competition) <- c("0","1")
+
+COX1 <- summarySE(COX1, measurevar="time", groupvars=c("Group", "precip_pred", "competition"))
+COX1
+
+ggplot(COX1, aes(x=competition, y=time, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
+  xlab("") + ylab("Day") + theme(text = element_text(size=18)) +
+  geom_errorbar(aes(ymin=time-se,ymax=time+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
+  geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
+  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + 
+  theme(legend.position="top") + 
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) # as point plot
+
+ggplot(COX1, aes(x=competition, y=time, fill = precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
+  xlab("Competition") + ylab("Number of days") + theme(text = element_text(size=18)) + geom_bar(stat = "identity", position = "dodge") + ylim(c(0,29))  +
+  geom_errorbar(aes(ymin=time-se,ymax=time+se), position = position_dodge(width=1), width=0.4, size=0.5, color="black")+
+  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability")  +
+  theme(legend.position="top")  +
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with")) # as TNT or bar plot
+
+############################################################################
+#                         Plant traits
+############################################################################
+# Here we are looking at the 6 traits we were measuring:
+# - Dry aboveground biomass
+# - Dry belowground biomass
+# - Root shoot ratio
+# - Root length
+# - Number of leaves
+# - length of longest leaf
+# but before we checked if there is an edge effect for the pots with competition 
+# (at a point of time it was not possible to randomize them because Galium had 
+# grown over several pots and the pots could no longer be replaced without damaging 
+# the plants.)
+
+#   checking and calculate root shoot ratio
 str(data)
 
 data$competition <- as.factor(data$competition)
@@ -26,73 +198,68 @@ data$edge_effect <- as.factor(data$edge_effect)
 
 data$RSratio <- data$bground_biomass/data$abground_biomass # calculate root shoot ratio
 
-# function for changing panel names later
-names <- list("1control" = "Control","2short_drought" = "Short drought","3long_drought" = "Long drought")
-labeller <- function(variable,value){
-  return(names[value])
-}
-
 #---------------------------------------------------------------------------
 ############################################################################
 # Testing whether there is an edge effect 
 #     All 6 competition trays
 
 Subcompetition <- subset(data, competition == "1") # subset
-Subcompetition <- subset(Subcompetition, !is.na(Subcompetition[,31])) # remmoving died ones (NA everywhere)
+Subcompetition <- subset(Subcompetition, !is.na(Subcompetition[,31])) # removing died ones (NA everywhere)
 
 str(Subcompetition)
 # abovegrounf biomass
 t.test( x = Subcompetition$abground_biomass[Subcompetition$edge_effect == '1'], y = Subcompetition$abground_biomass[Subcompetition$edge_effect == '0'])
 #     Long drought M
-Sub_Comp_Long <- subset(Subcompetition, Group == "long_drought") # subset
-Sub_Comp_Long_M <- subset(Sub_Comp_Long, precip_pred == "M")
+Sub_Comp_Long <- subset(Subcompetition, Group == "3long_drought") # subset
+Sub_Comp_Long_M <- subset(Sub_Comp_Long, precip_pred == "1M")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Long_M)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Long_M)
 t.test(root_length ~ edge_effect, Sub_Comp_Long_M)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Long_M)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Long_M)
 #     Long drought L
-Sub_Comp_Long_L <- subset(Sub_Comp_Long, precip_pred == "L")
+Sub_Comp_Long_L <- subset(Sub_Comp_Long, precip_pred == "2L")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Long_L)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Long_L)
 t.test(root_length ~ edge_effect, Sub_Comp_Long_L)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Long_L)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Long_L)
 #     Short drought M
-Sub_Comp_Short <- subset(Subcompetition, Group == "short_drought") # subset
-Sub_Comp_Short_M <- subset(Sub_Comp_Short, precip_pred == "M")
+Sub_Comp_Short <- subset(Subcompetition, Group == "2short_drought") # subset
+Sub_Comp_Short_M <- subset(Sub_Comp_Short, precip_pred == "1M")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Short_M)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Short_M)
 t.test(root_length ~ edge_effect, Sub_Comp_Short_M)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Short_M)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Short_M)
 #     Short drought L
-Sub_Comp_Short_L <- subset(Sub_Comp_Short, precip_pred == "L")
+Sub_Comp_Short_L <- subset(Sub_Comp_Short, precip_pred == "2L")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Short_L)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Short_L)
 t.test(root_length ~ edge_effect, Sub_Comp_Short_L)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Short_L)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Short_L)
 #     Control M
-Sub_Comp_Con <- subset(Subcompetition, Group == "control") # subset
-Sub_Comp_Con_M <- subset(Sub_Comp_Con, precip_pred == "M")
+Sub_Comp_Con <- subset(Subcompetition, Group == "1control") # subset
+Sub_Comp_Con_M <- subset(Sub_Comp_Con, precip_pred == "1M")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Con_M)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Con_M)
 t.test(root_length ~ edge_effect, Sub_Comp_Con_M)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Con_M)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Con_M)
 #     Control L
-Sub_Comp_Con_L <- subset(Sub_Comp_Con, precip_pred == "L")
+Sub_Comp_Con_L <- subset(Sub_Comp_Con, precip_pred == "2L")
 t.test(abground_biomass ~ edge_effect, Sub_Comp_Con_L)
 t.test(bground_biomass ~ edge_effect, Sub_Comp_Con_L)
 t.test(root_length ~ edge_effect, Sub_Comp_Con_L)
 t.test(nb_leavesf ~ edge_effect, Sub_Comp_Con_L)
 t.test(longest_leaff ~ edge_effect, Sub_Comp_Con_L)
-# checking for outliers --> by removing outlier, no effect
+# checking for outliers --> by removing outlier, no significant effect
 boxplot(Sub_Comp_Con_L$nb_leavesf)
 NoOut_Sub_Comp_Con_L<-Sub_Comp_Con_L[!Sub_Comp_Con_L$nb_leavesf>16,] 
 t.test(nb_leavesf ~ edge_effect, NoOut_Sub_Comp_Con_L)
 
+# Overall, there is no edge effect (--> not needed as random factor)
 #---------------------------------------------------------------------------
 ############################################################################
 #              aboveground biomass
@@ -102,10 +269,6 @@ t.test(nb_leavesf ~ edge_effect, NoOut_Sub_Comp_Con_L)
 data1<-data[complete.cases(data[,32]),] # to use only complete cases
 boxplot(data1$abground_biomass)
 boxplot.stats(data1$abground_biomass)$out # 
-#data_aboveground_biomass<-data1[!data1$abground_biomass>0.7,] # to remove outliers --> only extreme: 0.7 --> not remove!
-boxplot(data_aboveground_biomass$abground_biomass) # check if it worked
-
-# ggplot(data_aboveground_biomass, aes(x = competition, y = abground_biomass)) + geom_boxplot(fill = "green") 
 
 #-----------------------------------------------
     # 2: Model building
@@ -131,13 +294,11 @@ hist(resid(mod_abground_biomass_NEW),breaks=50)
 qqnorm(resid(mod_abground_biomass_NEW))
 qqline(resid(mod_abground_biomass_NEW)) 
 
-
 ## HETEROCEDASTICITY
 plot(resid(mod_abground_biomass_NEW) ~ fitted(mod_abground_biomass_NEW)) # it seems that there is some heteroscedasticity
 # use the Bartlett test
 bartlett.test((resid(mod_abground_biomass_NEW))~interaction(data1$Group, data1$precip_pred, data1$competition), data=data1)
 #CONCLUSION: p should be > 0.05 to be a Homocedastic model
-
 
 # --------------------------------------------------------------------------
       # 4: ANOVA 
@@ -164,7 +325,7 @@ lsmeans(mod_abground_biomass_NEW,pairwise ~ precip_pred:competition:Group, adjus
 # always in alphabetic order
 summary_Aboveground_TEST <- data1
 levels(summary_Aboveground_TEST$Group) <- c("1control","2short_drought", "3long_drought" )
-levels(summary_Aboveground_TEST$precip_pred) <- c("L", "M")
+levels(summary_Aboveground_TEST$precip_pred) <- c("More", "Less")
 summary_Aboveground <- summarySE(summary_Aboveground_TEST, measurevar="abground_biomass", groupvars=c("Group", "precip_pred"))
 summary_Aboveground
 
@@ -180,10 +341,9 @@ dot_aboveground <- ggplot(summary_Aboveground, aes(x=Group, y=abground_biomass, 
 plot(dot_aboveground)
 #----------------------------------------------------------------------------
 #     Complete Graphic
-
 summary_Aboveground_TEST <- data1
 levels(summary_Aboveground_TEST$Group) <- c("1control","2short_drought", "3long_drought" )
-levels(summary_Aboveground_TEST$precip_pred) <- c("L", "M")
+levels(summary_Aboveground_TEST$precip_pred) <- c("More", "Less")
 levels(summary_Aboveground_TEST$competition) <- c("0","1")
 summary_Aboveground_TEST <- summarySE(summary_Aboveground_TEST, measurevar="abground_biomass", groupvars=c("Group", "precip_pred", "competition"))
 summary_Aboveground_TEST
@@ -196,7 +356,7 @@ Aboveground_biomass <- ggplot(summary_Aboveground_TEST, aes(x=competition, y=abg
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Aboveground_biomass.png", width = 5, height = 5)
 
 #---------------------------------------------------------------------------
@@ -206,12 +366,8 @@ ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecol
 
 # 1: Exploring data
 data2<-data[complete.cases(data[,31]),] # to use only complete cases
-boxplot(data2$bground_biomass)
+boxplot(data2$bground_biomass) # looks good 
 boxplot.stats(data2$bground_biomass)$out # 
-#data_belowground_biomass<-data2[!data2$bground_biomass>0.034,] # to remove outliers --> only extreme: dont remove
-boxplot(data_belowground_biomass$bground_biomass) # check if it worked
-
-# ggplot(data_belowground_biomass, aes(x = competition, y = bground_biomass)) + geom_boxplot(fill = "green") 
 
 #-----------------------------------------------
 # 2: Model building
@@ -237,13 +393,11 @@ hist(resid(mod_belowground_biomass_NEW),breaks=50)
 qqnorm(resid(mod_belowground_biomass_NEW)) 
 qqline(resid(mod_belowground_biomass_NEW)) 
 
-
 ## HETEROCEDASTICITY
 plot(resid(mod_belowground_biomass_NEW) ~ fitted(mod_belowground_biomass_NEW)) # it seems that there is some heteroscedasticity
 # use the Bartlett test
-bartlett.test((resid(mod_belowground_biomass_NEW))~interaction(data_belowground_biomass$Group, data_belowground_biomass$precip_pred, data_belowground_biomass$competition), data=data_belowground_biomass)
+bartlett.test((resid(mod_belowground_biomass_NEW))~interaction(data2$Group, data2$precip_pred, data2$competition), data=data2)
 #CONCLUSION: p should be > 0.05 to be a Homocedastic model
-
 
 # --------------------------------------------------------------------------
 # 4: ANOVA 
@@ -287,7 +441,6 @@ plot(dot_belowground)
 
 #----------------------------------------------------------------------------
 #     Complete Graphic
-
 summary_Belowground_TEST <- data2
 levels(summary_Belowground_TEST$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_Belowground_TEST$precip_pred) <- c("L", "M")
@@ -303,7 +456,7 @@ Belowground_biomass <- ggplot(summary_Belowground_TEST, aes(x=competition, y=bgr
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Belowground_biomass.png", width = 5, height = 5)
 
 
@@ -343,12 +496,10 @@ hist(resid(mod_RSratio_NEW),breaks=50)
 qqnorm(resid(mod_RSratio_NEW)) 
 qqline(resid(mod_RSratio_NEW)) 
 
-
 ## HETEROCEDASTICITY
 plot(resid(mod_RSratio_NEW) ~ fitted(mod_RSratio_NEW)) # ok
 bartlett.test((resid(mod_RSratio_NEW))~interaction(data3$Group, data3$precip_pred, data3$competition), data=data3)
 #CONCLUSION: p should be > 0.05 to be a Homocedastic model
-
 
 # --------------------------------------------------------------------------
 # 4: ANOVA 
@@ -391,7 +542,6 @@ plot(dot_RSratio)
 
 #----------------------------------------------------------------------------
 #     Complete Graphic
-
 summary_RSratio <- data3
 levels(summary_RSratio$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_RSratio$precip_pred) <- c("L", "M")
@@ -407,7 +557,7 @@ Root_Shoot_Ratio <- ggplot(summary_RSratio, aes(x=competition, y=RSratio, fill=p
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Root_Shoot_Ratio.png", width = 5, height = 5)
 
 #---------------------------------------------------------------------------
@@ -443,11 +593,9 @@ hist(resid(mod_root_length_NEW),breaks=50)
 qqnorm(resid(mod_root_length_NEW)) 
 qqline(resid(mod_root_length_NEW)) 
 
-
 ## HETEROCEDASTICITY
 plot(resid(mod_root_length_NEW) ~ fitted(mod_root_length_NEW)) # good
 bartlett.test((resid(mod_root_length_NEW))~interaction(data4$Group, data4$precip_pred, data4$competition), data=data4)
-
 
 # --------------------------------------------------------------------------
 # 4: ANOVA 
@@ -486,7 +634,6 @@ plot(dot_root_length)
 
 #----------------------------------------------------------------------------
 #     Complete Graphic
-
 summary_root_length <- data4
 levels(summary_root_length$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_root_length$precip_pred) <- c("L", "M")
@@ -502,7 +649,7 @@ Root_Length <- ggplot(summary_root_length, aes(x=competition, y=root_length, fil
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Root_Length.png", width = 5, height = 5)
 
 #---------------------------------------------------------------------------
@@ -538,11 +685,9 @@ hist(resid(mod_nb_leaves_NEW),breaks=50)
 qqnorm(resid(mod_nb_leaves_NEW)) 
 qqline(resid(mod_nb_leaves_NEW)) 
 
-
 ## HETEROCEDASTICITY
 plot(resid(mod_nb_leaves_NEW) ~ fitted(mod_nb_leaves_NEW)) # good
 bartlett.test((resid(mod_nb_leaves_NEW))~interaction(data5$Group, data5$precip_pred, data5$competition), data=data5)
-
 
 # --------------------------------------------------------------------------
 # 4: ANOVA 
@@ -590,10 +735,9 @@ plot(dot_nb_leaves)
 
 #----------------------------------------------------------------------------
 #     Complete Graphic
-
 summary_nb_leaves <- data5
 levels(summary_nb_leaves$Group) <- c("1control","2short_drought", "3long_drought" )
-levels(summary_nb_leaves$precip_pred) <- c("Less", "More")
+levels(summary_nb_leaves$precip_pred) <- c("More", "Less")
 levels(summary_nb_leaves$competition) <- c("0","1")
 summary_nb_leaves <- summarySE(summary_nb_leaves, measurevar="nb_leavesf", groupvars=c("Group", "precip_pred", "competition"))
 summary_nb_leaves
@@ -606,7 +750,7 @@ Nb_leaves <- ggplot(summary_nb_leaves, aes(x=competition, y=nb_leavesf, fill=pre
   theme(legend.position="top") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Nb_leaves.png", width = 5, height = 5)
 #---------------------------------------------------------------------------
 ############################################################################
@@ -672,7 +816,7 @@ plot(a)
 # 6: Graphics 
 summary_longest_leaf <- data6
 levels(summary_longest_leaf$Group) <- c("1control","2short_drought", "3long_drought" )
-levels(summary_longest_leaf$precip_pred) <- c("Less", "More")
+levels(summary_longest_leaf$precip_pred) <- c("More", "Less")
 summary_longest_leaf <- summarySE(summary_longest_leaf, measurevar="longest_leaff", groupvars=c("Group", "precip_pred"))
 summary_longest_leaf
 
@@ -692,7 +836,7 @@ plot(dot_longest_leaf)
 
 summary_longest_leaf <- data6
 levels(summary_longest_leaf$Group) <- c("1control","2short_drought", "3long_drought" )
-levels(summary_longest_leaf$precip_pred) <- c("Less", "More")
+levels(summary_longest_leaf$precip_pred) <- c("More", "Less")
 levels(summary_longest_leaf$competition) <- c("0","1")
 summary_longest_leaf <- summarySE(summary_longest_leaf, measurevar="longest_leaff", groupvars=c("Group", "precip_pred", "competition"))
 summary_longest_leaf
@@ -705,38 +849,36 @@ Longest_leaf <- ggplot(summary_longest_leaf, aes(x=competition, y=longest_leaff,
   theme(legend.position="top") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
 
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "Longest_leaf.png", width = 5, height = 5)
 
 #----------------------------------------------------------------------------
 # Save Graphics
 # without competition
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_belowground.png", width = 5, height = 5)
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_aboveground.png", width = 5, height = 5)
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_RSratio.png", width = 5, height = 5)
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_root_length.png", width = 5, height = 5)
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_nb_leaves.png", width = 5, height = 5)
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "dot_longest_leaf.png", width = 5, height = 5)
 
 ML_Plot <- ggarrange(dot_belowground, dot_aboveground, dot_RSratio, dot_root_length, dot_nb_leaves, dot_longest_leaf , 
           labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) +  scale_fill_manual(name = "Precipitation predictability")
-
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+ggsave(path = outdir, 
        filename = "ML_Plot.png", width = 10, height = 14) 
 
 # ---------------------------------------------------------------------------
-
+# The CompletePlot plot is the important one, because here we can check all fixed factors together
 CompletePlot <- ggarrange(Aboveground_biomass,Belowground_biomass, Root_Shoot_Ratio, Root_Length, Nb_leaves, Longest_leaf,
                           labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) + scale_fill_manual(name = "Precipitation predictability")
-
-
-ggsave(path = "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics", 
+CompletePlot
+ggsave(path = outdir, 
        filename = "CompletePlot.png", width = 12, height = 14) 
 
 
