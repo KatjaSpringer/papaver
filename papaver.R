@@ -22,9 +22,7 @@ library(survminer)
 
 args = commandArgs(trailingOnly=TRUE)
 
-wd <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment"
 #wd <- args[1]
-outdir <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics"
 #outdir <- args[2]
 
 
