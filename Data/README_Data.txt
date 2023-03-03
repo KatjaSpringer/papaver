@@ -1,5 +1,4 @@
-Explanation of the variables
-
+Explanation of the variables of the datasets: COX.xlsx, Measures.xlsx, Soil_humidity.xlsx
 
 --------------------COX.xlsx----------------------------------
 Dataset with the survival
