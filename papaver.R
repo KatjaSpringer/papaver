@@ -22,10 +22,10 @@ library(survminer)
 
 args = commandArgs(trailingOnly=TRUE)
 
-#wd <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment"
-wd <- args[1]
-#outdir <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics"
-outdir <- args[2]
+wd <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment"
+#wd <- args[1]
+outdir <- "C:/Users/katja/Desktop/Uni Frankfurt/Semester 2/Evolutionary Ecology of Plants and Global Change/Experiment/Graphics"
+#outdir <- args[2]
 
 
 setwd(wd)
@@ -157,6 +157,21 @@ levels(COX1$competition) <- c("0","1")
 COX1 <- summarySE(COX1, measurevar="time", groupvars=c("Group", "precip_pred", "competition"))
 COX1
 
+COX2 <- COX
+COX2 <- COX2[complete.cases(COX2[,18]),]
+levels(COX2$Group) <- c("control","short_drought", "long_drought" )
+COX2 <- summarySE(COX2, measurevar="time", groupvars=c( "precip_pred"))
+COX2
+
+t.test(time ~ precip_pred, COX) # compare M and L
+
+SubWilting1 <- subset(COX, Group == "1_control") # subset
+SubWilting2 <- subset(COX, Group == "2_short_drought") # subset
+SubWilting3 <- subset(COX, Group == "3_long_drought") # subset
+t.test(time ~ precip_pred, SubWilting1) # compare M and L 100% 
+t.test(time ~ precip_pred, SubWilting2) # compare M and L
+t.test(time ~ precip_pred, SubWilting3) # compare M and L
+
 ggplot(COX1, aes(x=competition, y=time, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
   xlab("") + ylab("Day") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=time-se,ymax=time+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
@@ -197,6 +212,14 @@ data$Group <- as.factor(data$Group)
 data$edge_effect <- as.factor(data$edge_effect)
 
 data$RSratio <- data$bground_biomass/data$abground_biomass # calculate root shoot ratio
+
+# Sub-setting drought and competition conditions
+Sub1 <- subset(data, Group == "1control") # subset
+Sub2 <- subset(data, Group == "2short_drought") # subset
+Sub3 <- subset(data, Group == "3long_drought") # subset
+SubPlus <- subset(data, competition == "1") # subset
+SubMinus <- subset(data, competition == "0") # subset  
+
 
 #---------------------------------------------------------------------------
 ############################################################################
@@ -321,6 +344,16 @@ lsmeans(mod_abground_biomass_NEW,pairwise ~ precip_pred:Group, adjust="tukey")
 lsmeans(mod_abground_biomass_NEW,pairwise ~ precip_pred:competition:Group, adjust="tukey")
 
 # ---------------------------------------------------------------------------
+#  main precipitation predictability effect 
+t.test(abground_biomass ~ precip_pred, data) # compare M and L
+
+t.test(abground_biomass ~ precip_pred, Sub1) # compare M and L  
+t.test(abground_biomass ~ precip_pred, Sub2) # compare M and L
+t.test(abground_biomass ~ precip_pred, Sub3) # compare M and L
+t.test(abground_biomass ~ precip_pred, SubPlus) # compare M and L
+t.test(abground_biomass ~ precip_pred, SubMinus) # compare M and L
+
+# ---------------------------------------------------------------------------
       # 6: Graphics 
 # always in alphabetic order
 summary_Aboveground_TEST <- data1
@@ -420,7 +453,19 @@ a<-lsmeans(mod_belowground_biomass_NEW, ~ precip_pred:competition:Group) # M & L
 plot(a)
 
 # ---------------------------------------------------------------------------
-# 6: Graphics 
+#  6: main precipitation predictability effect 
+t.test(bground_biomass ~ precip_pred, data) # compare M and L
+
+
+t.test(bground_biomass ~ precip_pred, Sub1) # compare M and L  
+t.test(bground_biomass ~ precip_pred, Sub2) # compare M and L
+t.test(bground_biomass ~ precip_pred, Sub3) # compare M and L
+t.test(bground_biomass ~ precip_pred, SubPlus) # compare M and L
+t.test(bground_biomass ~ precip_pred, SubMinus) # compare M and L
+
+
+# ---------------------------------------------------------------------------
+# 7: Graphics 
 data2$bground_biomass  <- data2$bground_biomass * 1000
 summary_Belowground_TEST <- data2
 levels(summary_Belowground_TEST$Group) <- c("1control","2short_drought", "3long_drought" )
@@ -522,7 +567,18 @@ a<-lsmeans(mod_RSratio_NEW, ~ precip_pred:competition:Group) # M & L seem to be 
 plot(a)
 
 # ---------------------------------------------------------------------------
-# 6: Graphics 
+#  6: main precipitation predictability effect 
+t.test(RSratio ~ precip_pred, data) # compare M and L
+
+
+t.test(RSratio ~ precip_pred, Sub1) # compare M and L  
+t.test(RSratio ~ precip_pred, Sub2) # compare M and L
+t.test(RSratio ~ precip_pred, Sub3) # compare M and L
+t.test(RSratio ~ precip_pred, SubPlus) # compare M and L
+t.test(RSratio ~ precip_pred, SubMinus) # compare M and L
+
+# ---------------------------------------------------------------------------
+# 7: Graphics 
 summary_RSratio <- data3
 levels(summary_RSratio$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_RSratio$precip_pred) <- c("L", "M")
@@ -614,7 +670,19 @@ plot(a)
 lsmeans(mod_root_length_NEW,pairwise ~ precip_pred:competition:Group, adjust="tukey")
 
 # ---------------------------------------------------------------------------
-# 6: Graphics 
+#  6: main precipitation predictability effect 
+t.test(root_length ~ precip_pred, data) # compare M and L
+
+
+t.test(root_length ~ precip_pred, Sub1) # compare M and L  
+t.test(root_length ~ precip_pred, Sub2) # compare M and L
+t.test(root_length ~ precip_pred, Sub3) # compare M and L
+t.test(root_length ~ precip_pred, SubPlus) # compare M and L
+t.test(root_length ~ precip_pred, SubMinus) # compare M and L
+
+
+# ---------------------------------------------------------------------------
+# 7: Graphics 
 summary_root_length <- data4
 levels(summary_root_length$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_root_length$precip_pred) <- c("L", "M")
@@ -733,6 +801,16 @@ dot_nb_leaves <- ggplot(summary_nb_leaves, aes(x=Group, y=nb_leavesf, fill=preci
 
 plot(dot_nb_leaves)
 
+# ---------------------------------------------------------------------------
+#  main precipitation predictability effect 
+t.test(nb_leavesf ~ precip_pred, data) # compare M and L
+
+t.test(nb_leavesf ~ precip_pred, Sub1) # compare M and L  
+t.test(nb_leavesf ~ precip_pred, Sub2) # compare M and L
+t.test(nb_leavesf ~ precip_pred, Sub3) # compare M and L
+t.test(nb_leavesf ~ precip_pred, SubPlus) # compare M and L
+t.test(nb_leavesf ~ precip_pred, SubMinus) # compare M and L
+
 #----------------------------------------------------------------------------
 #     Complete Graphic
 summary_nb_leaves <- data5
@@ -813,7 +891,16 @@ a<-lsmeans(mod_longest_leaf_NEW, ~ precip_pred:competition:Group)
 plot(a)
 
 # ---------------------------------------------------------------------------
-# 6: Graphics 
+# 6: Significant main precipitation predictability effect 
+t.test(longest_leaff ~ precip_pred, data) # compare M and L
+
+t.test(longest_leaff ~ precip_pred, Sub1) # compare M and L  
+t.test(longest_leaff ~ precip_pred, Sub2) # compare M and L
+t.test(longest_leaff ~ precip_pred, Sub3) # compare M and L
+t.test(longest_leaff ~ precip_pred, SubPlus) # compare M and L
+t.test(longest_leaff ~ precip_pred, SubMinus) # compare M and L
+# ---------------------------------------------------------------------------
+# 7: Graphics 
 summary_longest_leaf <- data6
 levels(summary_longest_leaf$Group) <- c("1control","2short_drought", "3long_drought" )
 levels(summary_longest_leaf$precip_pred) <- c("More", "Less")
