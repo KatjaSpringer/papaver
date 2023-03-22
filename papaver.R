@@ -31,6 +31,7 @@ data <-read_excel("Measures.xlsx", col_types = c("text",
                                                  "text", "text", "text", "numeric","numeric",   "numeric", "text", "numeric", "numeric",  "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",   "numeric", "numeric", "numeric", "numeric",  "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
 Soil_humidity <- read_excel("Soil_humidity.xlsx")
 COX <- read_excel("COX.xlsx")
+
 #---------------------------------------------------------------------------
 ############################################################################
 #                         Soil humidity
@@ -163,12 +164,17 @@ COX2
 
 t.test(time ~ precip_pred, COX) # compare M and L
 
-SubWilting1 <- subset(COX, Group == "1_control") # subset
-SubWilting2 <- subset(COX, Group == "2_short_drought") # subset
-SubWilting3 <- subset(COX, Group == "3_long_drought") # subset
-t.test(time ~ precip_pred, SubWilting1) # compare M and L 100% 
-t.test(time ~ precip_pred, SubWilting2) # compare M and L
-t.test(time ~ precip_pred, SubWilting3) # compare M and L
+SubWilting1 <- subset(COX, Group == "1_control") # control
+SubWilting2 <- subset(COX, Group == "2_short_drought") # short
+SubWilting3 <- subset(COX, Group == "3_long_drought") # long
+SubWilting4 <- subset(COX, competition == "0") #  without C
+SubWilting5 <- subset(COX, competition == "1") #  with C
+
+#t.test(time ~ precip_pred, SubWilting1) # compare M and L control 100% 
+t.test(time ~ precip_pred, SubWilting2) # compare M and L short
+t.test(time ~ precip_pred, SubWilting3) # compare M and L long
+t.test(time ~ precip_pred, SubWilting4) # compare M and L C-
+t.test(time ~ precip_pred, SubWilting5) # compare M and L C+
 
 ggplot(COX1, aes(x=competition, y=time, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
   xlab("") + ylab("Day") + theme(text = element_text(size=18)) +
@@ -286,20 +292,20 @@ t.test(nb_leavesf ~ edge_effect, NoOut_Sub_Comp_Con_L)
 #              aboveground biomass
 ############################################################################
 
-    # 1: Exploring data
+# 1: Exploring data
 data1<-data[complete.cases(data[,32]),] # to use only complete cases
 boxplot(data1$abground_biomass)
 boxplot.stats(data1$abground_biomass)$out # 
 
 #-----------------------------------------------
-    # 2: Model building
+# 2: Model building
 mod_abground_biomass <- lmer(abground_biomass ~ nb_leavesi  + precip_pred * competition * Group
-               + (1|family), data=data1)
+                             + (1|family), data=data1)
 Anova(mod_abground_biomass, type = 2) # aboveground biomass
 # competition, Group, competition:Group // precip_pred:Group .
 
 #-------------------------------------------------
-    # 3: Checking Assumptions
+# 3: Checking Assumptions
 ## Test NORMALITY of residuals
 shapiro.test(resid(mod_abground_biomass))     # p-value =   2.905e-10
 hist(resid(mod_abground_biomass),breaks=50)   # no Gaussian distribution --> Kurtotis (see next 2 commands)
@@ -322,13 +328,13 @@ bartlett.test((resid(mod_abground_biomass_NEW))~interaction(data1$Group, data1$p
 #CONCLUSION: p should be > 0.05 to be a Homocedastic model
 
 # --------------------------------------------------------------------------
-      # 4: ANOVA 
+# 4: ANOVA 
 Anova(mod_abground_biomass_NEW,type=2) # type = 2 represents the error type 2
 # competition, Group, competition:Group, precip_pred:Group
 summary(mod_abground_biomass_NEW)
 
 # ---------------------------------------------------------------------------
-      # 5: Post-hoc 
+# 5: Post-hoc 
 
 # A Post-hoc test is only needed if there is significant interactions or significant factors with 3 or more levels
 # competition:Group
@@ -351,8 +357,11 @@ t.test(abground_biomass ~ precip_pred, Sub3) # compare M and L
 t.test(abground_biomass ~ precip_pred, SubPlus) # compare M and L
 t.test(abground_biomass ~ precip_pred, SubMinus) # compare M and L
 
+# comparison between L and M in long drought conditions in %
+(0.1453511-0.1053460)/0.1453511 # 0.2752308 --> 27.52%
+
 # ---------------------------------------------------------------------------
-      # 6: Graphics 
+# 6: Graphics 
 # always in alphabetic order
 summary_Aboveground_TEST <- data1
 levels(summary_Aboveground_TEST$Group) <- c("1control","2short_drought", "3long_drought" )
@@ -403,7 +412,7 @@ boxplot.stats(data2$bground_biomass)$out #
 #-----------------------------------------------
 # 2: Model building
 mod_belowground_biomass <- lmer(bground_biomass ~ nb_leavesi  + precip_pred * competition * Group
-                             + (1|family), data=data2)
+                                + (1|family), data=data2)
 Anova(mod_belowground_biomass, type = 2) #blowground biomass
 # competition, Group, competition:Group, precip_pred:competition:Group
 
@@ -417,7 +426,7 @@ qqline(resid(mod_belowground_biomass))
 
 # NEW model
 mod_belowground_biomass_NEW <- lmer((bground_biomass)^0.42 ~ nb_leavesi  + precip_pred * competition * Group
-                                 + (1|family), data=data2) # 
+                                    + (1|family), data=data2) # 
 
 shapiro.test(resid(mod_belowground_biomass_NEW))   # p = 0.06292
 hist(resid(mod_belowground_biomass_NEW),breaks=50) 
@@ -461,6 +470,8 @@ t.test(bground_biomass ~ precip_pred, Sub3) # compare M and L
 t.test(bground_biomass ~ precip_pred, SubPlus) # compare M and L
 t.test(bground_biomass ~ precip_pred, SubMinus) # compare M and L
 
+# comparison between long drought L and M in % (M-L)/M
+(0.006317468-0.004684583)/0.006317468 # 0.2584714 --> 25.8 %
 
 # ---------------------------------------------------------------------------
 # 7: Graphics 
@@ -518,7 +529,7 @@ boxplot(data3$RSratio) # looks good
 #-----------------------------------------------
 # 2: Model building
 mod_RSratio <- lmer(RSratio ~ nb_leavesi  + precip_pred * competition * Group
-                                + (1|family), data=data3)
+                    + (1|family), data=data3)
 Anova(mod_RSratio, type = 2) #blowground biomass
 # Group, competition:Group, precip_pred:competition:Group
 
@@ -532,7 +543,7 @@ qqline(resid(mod_RSratio))
 
 # NEW model
 mod_RSratio_NEW <- lmer((RSratio)^0.7 ~ nb_leavesi  + precip_pred * competition * Group
-                                    + (1|family), data=data3) # p= 0.08487 --> not nice but above 0.05
+                        + (1|family), data=data3) # p= 0.08487 --> not nice but above 0.05
 
 shapiro.test(resid(mod_RSratio_NEW))   
 hist(resid(mod_RSratio_NEW),breaks=50) 
@@ -626,7 +637,7 @@ boxplot(data4$root_length)
 #-----------------------------------------------
 # 2: Model building
 mod_root_length<- lmer(root_length ~ nb_leavesi  + precip_pred * competition * Group
-                    + (1|family), data=data4)
+                       + (1|family), data=data4)
 Anova(mod_RSratio, type = 2) #blowground biomass
 # Group, competition:Group, precip_pred:competition:Group
 
@@ -640,7 +651,7 @@ qqline(resid(mod_root_length))
 
 # NEW model
 mod_root_length_NEW <- lmer((root_length)^0.42 ~ nb_leavesi  + precip_pred * competition * Group
-                        + (1|family), data=data4) # p= 0.08487 --> not nice but above 0.05
+                            + (1|family), data=data4) # p= 0.08487 --> not nice but above 0.05
 
 shapiro.test(resid(mod_root_length_NEW))   
 hist(resid(mod_root_length_NEW),breaks=50) 
@@ -678,6 +689,8 @@ t.test(root_length ~ precip_pred, Sub3) # compare M and L
 t.test(root_length ~ precip_pred, SubPlus) # compare M and L
 t.test(root_length ~ precip_pred, SubMinus) # compare M and L
 
+# comparison L-M only with competition
+(8.932353-7.682609 )/8.932353 # 0.1399121 --> 14.0 %
 
 # ---------------------------------------------------------------------------
 # 7: Graphics 
@@ -730,7 +743,7 @@ boxplot(data5$nb_leavesf) # no extreme outliers
 #-----------------------------------------------
 # 2: Model building
 mod_nb_leaves<- lmer(nb_leavesf ~ nb_leavesi  + precip_pred * competition * Group
-                       + (1|family), data=data5)
+                     + (1|family), data=data5)
 Anova(mod_nb_leaves, type = 2) 
 # competition, Group, precip_pred:Group, competition:Group, precip_pred:competition:Group
 
@@ -744,7 +757,7 @@ qqline(resid(mod_nb_leaves))
 
 # NEW model
 mod_nb_leaves_NEW <- lmer((nb_leavesf)^0.12 ~ nb_leavesi  + precip_pred * competition * Group
-                            + (1|family), data=data5) # p= 0.08487 --> not nice but above 0.05
+                          + (1|family), data=data5) # p= 0.08487 --> not nice but above 0.05
 
 shapiro.test(resid(mod_nb_leaves_NEW))   
 hist(resid(mod_nb_leaves_NEW),breaks=50) 
@@ -840,7 +853,7 @@ boxplot(data6$longest_leaff) # good
 #-----------------------------------------------
 # 2: Model building
 mod_longest_leaf<- lmer(longest_leaff ~ nb_leavesi  + precip_pred * competition * Group
-                     + (1|family), data=data6)
+                        + (1|family), data=data6)
 Anova(mod_longest_leaf, type = 2) 
 # precip_pred, competition, Group, competition:Group, precip_pred:competition:Group
 
@@ -854,7 +867,7 @@ qqline(resid(mod_longest_leaf))
 
 # NEW model
 mod_longest_leaf_NEW <- lmer((longest_leaff)^0.8 ~ nb_leavesi  + precip_pred * competition * Group
-                          + (1|family), data=data6) 
+                             + (1|family), data=data6) 
 
 shapiro.test(resid(mod_longest_leaf_NEW))   
 hist(resid(mod_longest_leaf_NEW),breaks=50) 
@@ -897,6 +910,9 @@ t.test(longest_leaff ~ precip_pred, Sub2) # compare M and L
 t.test(longest_leaff ~ precip_pred, Sub3) # compare M and L
 t.test(longest_leaff ~ precip_pred, SubPlus) # compare M and L
 t.test(longest_leaff ~ precip_pred, SubMinus) # compare M and L
+
+# comparison between L and M in %
+(12.78169-11.63380)/12.78169 # 0.08980737 = 9.0 %
 # ---------------------------------------------------------------------------
 # 7: Graphics 
 summary_longest_leaf <- data6
@@ -954,7 +970,7 @@ ggsave(path = outdir,
        filename = "dot_longest_leaf.png", width = 5, height = 5)
 
 ML_Plot <- ggarrange(dot_belowground, dot_aboveground, dot_RSratio, dot_root_length, dot_nb_leaves, dot_longest_leaf , 
-          labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) +  scale_fill_manual(name = "Precipitation predictability")
+                     labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) +  scale_fill_manual(name = "Precipitation predictability")
 ggsave(path = outdir, 
        filename = "ML_Plot.png", width = 10, height = 14) 
 
@@ -965,9 +981,4 @@ CompletePlot <- ggarrange(Aboveground_biomass,Belowground_biomass, Root_Shoot_Ra
 CompletePlot
 ggsave(path = outdir, 
        filename = "CompletePlot.png", width = 12, height = 14) 
-
-
-
-
-
 
