@@ -48,21 +48,31 @@ str(Soil_humidity)
 
 aggregate(humidity~drought_treatment + date,data=Soil_humidity,mean)
 
+Soil_humidity$date[Soil_humidity$date == "1"] <- "12"
+Soil_humidity$date[Soil_humidity$date == "2"] <- "19"
+Soil_humidity$date[Soil_humidity$date == "3"] <- "26"
+
+Soil_humidity$date <- as.factor(Soil_humidity$date)
+
+
 summaryHUM <- summarySE(Soil_humidity, measurevar="humidity", groupvars=c("date","drought_treatment"))
 summaryHUM
 
-# Graph
+
 a <- ggplot(summaryHUM, aes(x=date, y=humidity, group=drought_treatment, colour=drought_treatment)) + 
-  geom_line() +
+  geom_line(size = 1.2) + 
   geom_point() +
   ylim(c(0,60)) +
-  scale_color_manual(values = c("green","blue","gold"), name = "Drought treatment", labels = c("Control", "Short drought", "Long drought")) +
-  xlab("Days of treatment") + ylab("Soil humidity (%)") +
+  scale_color_manual(values = c("#D0CECE",
+                                "#FFB96D",
+                                "#FFFF71"), name = "", labels = c("Control", "Long-term drought", "Short-term drought")) +
+  xlab("Day of experiment") + ylab("Soil humidity (%)") +
   theme_bw() +
-  ggtitle("Soil humidity during the drought treatment") +
+  ggtitle("") +
   labs(fill = "Drought treatment") +
   theme(plot.title = element_text(size = 12, face = "bold")) +
-  geom_errorbar(aes(ymin=humidity-se,ymax=humidity+se), position = position_dodge(width=0), width=.2, size=0.5, color="black")
+  geom_errorbar(aes(ymin=humidity-se,ymax=humidity+se), 
+                position = position_dodge(width=0), width=.2, size=0.5, color="black")
 a # looks as the drought treatment worked really well
 
 
@@ -100,13 +110,14 @@ COX$time = COX$time + 15
 str(COX)
 
 # Plot: Non-wilting proportion = f(days)
-ggsurvplot(survfit(Surv(time, status) ~ Group + precip_pred + competition, data=COX),
+ggsurvplot(survfit(Surv(time, status) ~ Group + precip_pred + competition, data=COX), size = 1.5,
            conf.int = ,
            xlim = c(13,26),
+           ylim = c(0.00,1.05),
            break.x.by = 2,
            legend = c("right"),
            axes.offset = F,
-           palette = c("lightgreen", "lightgreen", "darkgreen", "darkgreen", "lightblue", "lightblue", "blue", "blue", "yellow3", "yellow3", "darkorange", "darkorange"),
+           palette = c("#E7E6E6", "#E7E6E6", "#D0CECE", "#D0CECE", "#FEFB7A", "#FEFB7A", "#F4EE00", "#F4EE00", "#FFC88B", "#FFC88B", "#FF8A09", "#FF8A09"),
            linetype=c("solid","dashed","solid","dashed","solid","dashed","solid","dashed","solid","dashed","solid","dashed"),
            legend.labs= c("Control More C-", "Control More C+", "Control Less C-", "Control Less C+", "Short drought More C-", "Short drought More C+", "Short drought Less C-", "Short drought Less C+","Long drought More C-", "Long drought More C+", "Long drought Less C-", "Long drought Less C+"),
            legend.title = " Treatment combination",
@@ -114,7 +125,10 @@ ggsurvplot(survfit(Surv(time, status) ~ Group + precip_pred + competition, data=
            xlab = "Days",
            ylab = "Proportion of non-wilted plants",
            font.title = "bold",
-           ggtheme = theme_classic())
+           ggtheme = theme_bw(),
+           font.tickslab = c(12),
+           font.x = c(16),
+           font.y = c(16))
 
 # Linear mixed model
 
@@ -142,10 +156,12 @@ Anova(mod, type = 2)
 lsmeans(mod,pairwise ~ precip_pred:competition:Group, adjust="tukey")
 
 # function for labeling the plots
-names <- list("1control" = "Control","2short_drought" = "Short drought","3long_drought" = "Long drought")
+names <- list("1control" = "Control","2short_drought" = "Short-term drought","3long_drought" = "Long-term drought")
 labeller <- function(variable,value){
   return(names[value])
 }
+
+
 
 COX1 <- COX
 COX1 <- COX1[complete.cases(COX1[,18]),]
@@ -180,16 +196,26 @@ ggplot(COX1, aes(x=competition, y=time, fill=precip_pred)) + theme_bw() + facet_
   xlab("") + ylab("Day") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=time-se,ymax=time+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + 
+  scale_fill_manual(values = c("#0070C0","cyan2"), name = "Past Past precipitation predictability") + 
   theme(legend.position="top") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) # as point plot
 
-ggplot(COX1, aes(x=competition, y=time, fill = precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
-  xlab("Competition") + ylab("Number of days") + theme(text = element_text(size=18)) + geom_bar(stat = "identity", position = "dodge") + ylim(c(0,29))  +
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#D0CECE", "#FFFF71", "#FFB96D")))
+labeller <- as_labeller(c("control" = "Control","short_drought" = "Short-term drought","long_drought" = "Long-term drought"))
+
+ggplot(COX1, aes(x=competition, y=time, fill = precip_pred)) + theme_bw() + 
+  facet_wrap2(~ Group, labeller = labeller, strip = strip) +
+  xlab("Competition") + ylab("Number of days until wilting") + theme(text = element_text(size=18)) + geom_bar(stat = "identity", position = "dodge") + ylim(c(0,29))  +
   geom_errorbar(aes(ymin=time-se,ymax=time+se), position = position_dodge(width=1), width=0.4, size=0.5, color="black")+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability")  +
-  theme(legend.position="top")  +
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability")  +
+  theme(legend.position="top")  + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with")) # as TNT or bar plot
+
+#### Survival with survival package - command: coxph
+library(patchwork)
+library(ggsurvfit)
+coxph(Surv(time,status) ~ strata(precip_pred, Group, competition), data = COX) %>%
+  survfit2() %>% ggsurvfit() + add_risktable() + scale_y_continuous(limits = c(0,1))
 
 ############################################################################
 #                         Plant traits
@@ -348,7 +374,7 @@ lsmeans(mod_abground_biomass_NEW,pairwise ~ precip_pred:Group, adjust="tukey")
 lsmeans(mod_abground_biomass_NEW,pairwise ~ precip_pred:competition:Group, adjust="tukey")
 
 # ---------------------------------------------------------------------------
-#  main precipitation predictability effect 
+#  main Past precipitation predictability effect 
 t.test(abground_biomass ~ precip_pred, data) # compare M and L
 
 t.test(abground_biomass ~ precip_pred, Sub1) # compare M and L  
@@ -374,7 +400,7 @@ dot_aboveground <- ggplot(summary_Aboveground, aes(x=Group, y=abground_biomass, 
   xlab("") + ylab("Dry aboveground biomass (g)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=abground_biomass-se,ymax=abground_biomass+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2")) + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000")) + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", "", ""))
 
@@ -388,11 +414,15 @@ levels(summary_Aboveground_TEST$competition) <- c("0","1")
 summary_Aboveground_TEST <- summarySE(summary_Aboveground_TEST, measurevar="abground_biomass", groupvars=c("Group", "precip_pred", "competition"))
 summary_Aboveground_TEST
 
-Aboveground_biomass <- ggplot(summary_Aboveground_TEST, aes(x=competition, y=abground_biomass, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
+labeller_traits <- as_labeller(c("1control" = "Control", "2short_drought" = "Short-term drought", 
+                                 "3long_drought" = "Long-term drought"))
+
+Aboveground_biomass <- ggplot(summary_Aboveground_TEST, aes(x=competition, y=abground_biomass, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
   xlab("") + ylab("Dry aboveground biomass (g)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=abground_biomass-se,ymax=abground_biomass+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
@@ -460,7 +490,7 @@ a<-lsmeans(mod_belowground_biomass_NEW, ~ precip_pred:competition:Group) # M & L
 plot(a)
 
 # ---------------------------------------------------------------------------
-#  6: main precipitation predictability effect 
+#  6: main Past precipitation predictability effect 
 t.test(bground_biomass ~ precip_pred, data) # compare M and L
 
 
@@ -487,7 +517,7 @@ dot_belowground <- ggplot(summary_Belowground, aes(x=Group, y=bground_biomass, f
   xlab("") + ylab("Dry belowground biomass (mg)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=bground_biomass-se,ymax=bground_biomass+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation history") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Precipitation history") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", "", ""))
 
@@ -502,11 +532,12 @@ levels(summary_Belowground_TEST$competition) <- c("0","1")
 summary_Belowground_TEST <- summarySE(summary_Belowground_TEST, measurevar="bground_biomass", groupvars=c("Group", "precip_pred", "competition"))
 summary_Belowground_TEST
 
-Belowground_biomass <- ggplot(summary_Belowground_TEST, aes(x=competition, y=bground_biomass, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
+Belowground_biomass <- ggplot(summary_Belowground_TEST, aes(x=competition, y=bground_biomass, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
   xlab("") + ylab("Dry belowground biomass (mg)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=bground_biomass-se,ymax=bground_biomass+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
@@ -530,8 +561,7 @@ boxplot(data3$RSratio) # looks good
 # 2: Model building
 mod_RSratio <- lmer(RSratio ~ nb_leavesi  + precip_pred * competition * Group
                     + (1|family), data=data3)
-Anova(mod_RSratio, type = 2) #blowground biomass
-# Group, competition:Group, precip_pred:competition:Group
+Anova(mod_RSratio, type = 2)
 
 #-------------------------------------------------
 # 3: Checking Assumptions
@@ -576,7 +606,7 @@ a<-lsmeans(mod_RSratio_NEW, ~ precip_pred:competition:Group) # M & L seem to be 
 plot(a)
 
 # ---------------------------------------------------------------------------
-#  6: main precipitation predictability effect 
+#  6: main Past precipitation predictability effect 
 t.test(RSratio ~ precip_pred, data) # compare M and L
 
 
@@ -599,7 +629,7 @@ dot_RSratio <- ggplot(summary_RSratio, aes(x=Group, y=RSratio, fill=precip_pred)
   xlab("") + ylab("Root shoot ratio") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=RSratio-se,ymax=RSratio+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation history") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Precipitation history") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", "", ""))
 
@@ -614,13 +644,14 @@ levels(summary_RSratio$competition) <- c("0","1")
 summary_RSratio <- summarySE(summary_RSratio, measurevar="RSratio", groupvars=c("Group", "precip_pred", "competition"))
 summary_RSratio
 
-Root_Shoot_Ratio <- ggplot(summary_RSratio, aes(x=competition, y=RSratio, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
-  xlab("") + ylab("Root shoot ratio") + theme(text = element_text(size=18)) +
+Root_Shoot_Ratio <- ggplot(summary_RSratio, aes(x=competition, y=RSratio, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
+  xlab("Competition") + ylab("Root shoot ratio") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=RSratio-se,ymax=RSratio+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="") + 
-  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
 
 ggsave(path = outdir, 
        filename = "Root_Shoot_Ratio.png", width = 5, height = 5)
@@ -679,7 +710,7 @@ plot(a)
 lsmeans(mod_root_length_NEW,pairwise ~ precip_pred:competition:Group, adjust="tukey")
 
 # ---------------------------------------------------------------------------
-#  6: main precipitation predictability effect 
+#  6: main Past precipitation predictability effect 
 t.test(root_length ~ precip_pred, data) # compare M and L
 
 
@@ -705,7 +736,7 @@ dot_root_length <- ggplot(summary_root_length, aes(x=Group, y=root_length, fill=
   xlab("") + ylab("Root length") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=root_length-se,ymax=root_length+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", "", ""))
 
@@ -720,13 +751,14 @@ levels(summary_root_length$competition) <- c("0","1")
 summary_root_length <- summarySE(summary_root_length, measurevar="root_length", groupvars=c("Group", "precip_pred", "competition"))
 summary_root_length
 
-Root_Length <- ggplot(summary_root_length, aes(x=competition, y=root_length, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
-  xlab("") + ylab("Root length (cm)") + theme(text = element_text(size=18)) +
+Root_Length <- ggplot(summary_root_length, aes(x=competition, y=root_length, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
+  xlab("Competition") + ylab("Root length (cm)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=root_length-se,ymax=root_length+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="") + 
-  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
 
 ggsave(path = outdir, 
        filename = "Root_Length.png", width = 5, height = 5)
@@ -806,14 +838,14 @@ dot_nb_leaves <- ggplot(summary_nb_leaves, aes(x=Group, y=nb_leavesf, fill=preci
   xlab("Drought treatment") + ylab("Number of leaves") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=nb_leavesf-se,ymax=nb_leavesf+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation history") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Precipitation history") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "Control", "Short drought", "Long drought"))
 
 plot(dot_nb_leaves)
 
 # ---------------------------------------------------------------------------
-#  main precipitation predictability effect 
+#  main Past precipitation predictability effect 
 t.test(nb_leavesf ~ precip_pred, data) # compare M and L
 
 t.test(nb_leavesf ~ precip_pred, Sub1) # compare M and L  
@@ -831,13 +863,14 @@ levels(summary_nb_leaves$competition) <- c("0","1")
 summary_nb_leaves <- summarySE(summary_nb_leaves, measurevar="nb_leavesf", groupvars=c("Group", "precip_pred", "competition"))
 summary_nb_leaves
 
-Nb_leaves <- ggplot(summary_nb_leaves, aes(x=competition, y=nb_leavesf, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
-  xlab("Competition") + ylab("Number of leaves") + theme(text = element_text(size=18)) +
+Nb_leaves <- ggplot(summary_nb_leaves, aes(x=competition, y=nb_leavesf, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
+  xlab("") + ylab("Number of leaves") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=nb_leavesf-se,ymax=nb_leavesf+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="top") + 
-  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
 ggsave(path = outdir, 
        filename = "Nb_leaves.png", width = 5, height = 5)
@@ -902,7 +935,7 @@ a<-lsmeans(mod_longest_leaf_NEW, ~ precip_pred:competition:Group)
 plot(a)
 
 # ---------------------------------------------------------------------------
-# 6: Significant main precipitation predictability effect 
+# 6: Significant main Past precipitation predictability effect 
 t.test(longest_leaff ~ precip_pred, data) # compare M and L
 
 t.test(longest_leaff ~ precip_pred, Sub1) # compare M and L  
@@ -926,7 +959,7 @@ dot_longest_leaf <- ggplot(summary_longest_leaf, aes(x=Group, y=longest_leaff, f
   xlab("Drought treatment") + ylab("Length of longest leaf (cm)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=longest_leaff-se,ymax=longest_leaff+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="") + 
   ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "Control", "Short drought", "Long drought"))
 
@@ -942,13 +975,14 @@ levels(summary_longest_leaf$competition) <- c("0","1")
 summary_longest_leaf <- summarySE(summary_longest_leaf, measurevar="longest_leaff", groupvars=c("Group", "precip_pred", "competition"))
 summary_longest_leaf
 
-Longest_leaf <- ggplot(summary_longest_leaf, aes(x=competition, y=longest_leaff, fill=precip_pred)) + theme_bw() + facet_wrap(~ Group, labeller = labeller) +
-  xlab("Competition") + ylab("Length of longest leaf (cm)") + theme(text = element_text(size=18)) +
+Longest_leaf <- ggplot(summary_longest_leaf, aes(x=competition, y=longest_leaff, fill=precip_pred)) + theme_bw() + 
+  ggh4x::facet_wrap2(~ Group, labeller = labeller_traits, strip = strip) +
+  xlab("") + ylab("Length of longest leaf (cm)") + theme(text = element_text(size=18)) +
   geom_errorbar(aes(ymin=longest_leaff-se,ymax=longest_leaff+se), position = position_dodge(width=0.3), width=.12, size=1, color="black")+
   geom_point(size=3.5,position = position_dodge(width=0.3),shape=21)+
-  scale_fill_manual(values = c("purple","cyan2"), name = "Precipitation predictability") + # change the filled colour
+  scale_fill_manual(values = c("#0070C0","#FF0000"), name = "Past precipitation predictability") + # change the filled colour
   theme(legend.position="top") + 
-  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "without", "with"))
+  ggtitle("") + theme(plot.title = element_text(size = 12, face = "italic")) + scale_x_discrete(labels=c( "", ""))
 
 ggsave(path = outdir, 
        filename = "Longest_leaf.png", width = 5, height = 5)
@@ -970,15 +1004,14 @@ ggsave(path = outdir,
        filename = "dot_longest_leaf.png", width = 5, height = 5)
 
 ML_Plot <- ggarrange(dot_belowground, dot_aboveground, dot_RSratio, dot_root_length, dot_nb_leaves, dot_longest_leaf , 
-                     labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) +  scale_fill_manual(name = "Precipitation predictability")
+                     labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) +  scale_fill_manual(name = "Past Past precipitation predictability")
 ggsave(path = outdir, 
        filename = "ML_Plot.png", width = 10, height = 14) 
 
 # ---------------------------------------------------------------------------
 # The CompletePlot plot is the important one, because here we can check all fixed factors together
-CompletePlot <- ggarrange(Aboveground_biomass,Belowground_biomass, Root_Shoot_Ratio, Root_Length, Nb_leaves, Longest_leaf,
-                          labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) + scale_fill_manual(name = "Precipitation predictability")
+CompletePlot <- ggarrange(Aboveground_biomass,Longest_leaf,Nb_leaves, Belowground_biomass, Root_Length, Root_Shoot_Ratio, 
+                          labels = c("A", "B", "C", "D", "E", "F"), nrow = 3, ncol = 2, common.legend=T, legend = "bottom" ) + scale_fill_manual(name = "Past precipitation predictability")
 CompletePlot
 ggsave(path = outdir, 
-       filename = "CompletePlot.png", width = 12, height = 14) 
-
+       filename = "CompletePlot.png", width = 12.5, height = 14) 
